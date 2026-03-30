@@ -5,7 +5,7 @@ class BowedStringWorklet extends AudioWorkletProcessor {
         name: "L",
         defaultValue: 0,
         minValue: 0,
-        maxValue,
+        maxValue: 48000,
       },
       {
         name: "velocity",
@@ -75,8 +75,8 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     this.body = 0;
 
     // biquad coeeficients
-    this.bodyCoeff = [0, 0, 0, 0, 0];
-    this.bridgeCoeff = [0, 0, 0, 0, 0];
+    this.bodyCoeff = [0.063615, 0, -0.063615, -1.766843, 0.771412];
+    this.bridgeCoeff = [0.010295, 0, -0.010295, -1.973336, 0.973687];
   }
 
   process(inputs, outputs, parameters) {

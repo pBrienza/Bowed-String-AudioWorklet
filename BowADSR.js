@@ -1,5 +1,6 @@
 class BowADSR {
   constructor(audioCtx, bowFilter, a, d, s, r) {
+    this.audioCtx = audioCtx;
     this.pressure = new ConstantSourceNode(audioCtx, { offset: 0 });
     this.velocity = new ConstantSourceNode(audioCtx, { offset: 0 });
 
@@ -29,11 +30,11 @@ class BowADSR {
   }
 
   getPressure() {
-    return this.pressure.offset;
+    return this.pressure.offset.value;
   }
 
   getVelocity() {
-    return this.velocity.offset;
+    return this.velocity.offset.value;
   }
 
   /**
@@ -43,14 +44,14 @@ class BowADSR {
    * @param {Boolean} bowChange Tells ADSR to change bow direction if true
    */
   trigger(velocity, pressure, bowChange) {
-    triggerTime = this.audioCtx.currentTime;
-    isPlaying = triggerTime < this.releaseTime || this.releaseTime < 0;
+    const triggerTime = this.audioCtx.currentTime;
+    const isPlaying = triggerTime < this.releaseTime || this.releaseTime < 0;
 
     if (bowChange) {
       this.isUpBow = !this.isUpBow;
     }
 
-    const velo = velocity;
+    let velo = velocity;
 
     if (this.isUpBow) {
       velo = -1 * velocity;
@@ -61,12 +62,12 @@ class BowADSR {
       const attackTime = triggerTime + this.a;
       const decayTime = attackTime + this.d;
 
-      this.velocity.offset = 0;
+      this.velocity.offset.value = 0;
       this.velocity.offset.cancelScheduledValues(triggerTime);
       this.velocity.offset.linearRampToValueAtTime(velo, attackTime);
       this.velocity.offset.linearRampToValueAtTime(this.s * velo, decayTime);
 
-      this.pressure.offset = 0;
+      this.pressure.offset.value = 0;
       this.pressure.offset.cancelScheduledValues(triggerTime);
       this.pressure.offset.linearRampToValueAtTime(pressure, attackTime);
       this.pressure.offset.linearRampToValueAtTime(
@@ -101,10 +102,10 @@ class BowADSR {
     const currentTime = this.audioCtx.currentTime;
     this.releaseTime = currentTime + this.r;
 
-    this.velocity.offset.cancelAndHoldAtTime(currentTime);
+    this.velocity.offset.cancelScheduledValues(currentTime);
     this.velocity.offset.linearRampToValueAtTime(0, this.releaseTime);
 
-    this.pressure.offset.cancelAndHoldAtTime(currentTime);
+    this.pressure.offset.cancelScheduledValues(currentTime);
     this.pressure.offset.linearRampToValueAtTime(0, this.releaseTime);
   }
 }

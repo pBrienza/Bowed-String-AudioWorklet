@@ -13,15 +13,15 @@ document.querySelector("#startAudio").addEventListener("click", () => {
 });
 async function main() {
   ctx = new AudioContext();
-  const masterFader = new GainNode(ctx, { gain: 0 }).connect(ctx.destination);
+  const masterFader = new GainNode(ctx, { gain: 0 });
+  masterFader.connect(ctx.destination);
 
   await ctx.audioWorklet.addModule("BowedStringWorklet.js");
 
-  const bowFilter = new AudioWorkletNode(ctx, "BowedStringWorklet").connect(
-    masterFader,
-  );
+  const bowFilter = new AudioWorkletNode(ctx, "BowedStringWorklet");
+  bowFilter.connect(masterFader);
 
-  const rmsMeter = new AnalyserNode(ctx);
+  const rmsMeter = new AnalyserNode(ctx, { fftSize: 1024 });
   masterFader.connect(rmsMeter);
 
   const a = 100 / 1000;
@@ -32,10 +32,10 @@ async function main() {
   let velocity = 0.3;
   let pressure = 1;
 
-  bowADSR = new BowADSR(ctx, bowFilter, a, d, s, r);
+  const bowADSR = new BowADSR(ctx, bowFilter, a, d, s, r);
 
-  bowADSR.connectPressure(bowFilter.pressure);
-  bowADSR.connectVelocity(bowFilter.velocity);
+  bowADSR.connectPressure(bowFilter.parameters.get("pressure"));
+  bowADSR.connectVelocity(bowFilter.parameters.get("velocity"));
 
   // Listeners
 
@@ -52,12 +52,20 @@ async function main() {
     bowADSR.release();
   });
 
-  const rms = 0;
+  let rms = 0;
   const infoDisplay = document.querySelector("#info");
 
   setInterval(() => {
+    const fftInfo = new Float32Array();
+    rmsMeter.getFloatFrequencyData(fftInfo);
+    let sum = 0;
+    for (let i = 0; i < fftInfo.size; i++) {
+      sum += fftInfo[i];
+    }
+    rms = MusicTools.rms(sum);
     //rms = MusicTools.rms(rmsMeter.)
-    const info = `Pressure: ${bowADSR.getPressure()} || Velocity: ${bowADSR.getVelocity}`;
+    const info = `Pressure: ${bowADSR.getPressure()} || Velocity: ${bowADSR.getVelocity()} || RMS: ${rms}`;
     infoDisplay.innerText = info;
+    console.log(sum);
   }, 10);
 }
