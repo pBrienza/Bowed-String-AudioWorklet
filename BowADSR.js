@@ -3,6 +3,8 @@ class BowADSR {
     this.audioCtx = audioCtx;
     this.pressure = new ConstantSourceNode(audioCtx, { offset: 0 });
     this.velocity = new ConstantSourceNode(audioCtx, { offset: 0 });
+    this.pressure.start();
+    this.velocity.start();
 
     this.a = a;
     this.d = d;

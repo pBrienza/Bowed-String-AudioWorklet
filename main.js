@@ -64,8 +64,7 @@ async function main() {
     }
     rms = MusicTools.rms(sum);
     //rms = MusicTools.rms(rmsMeter.)
-    const info = `Pressure: ${bowADSR.getPressure()} || Velocity: ${bowADSR.getVelocity()} || RMS: ${rms}`;
+    const info = `Pressure: ${bowADSR.getPressure()} ${bowFilter.parameters.get("pressure").value}|| Velocity: ${bowADSR.getVelocity()} ${bowFilter.parameters.get("velocity").value}|| RMS: ${rms}`;
     infoDisplay.innerText = info;
-    console.log(sum);
   }, 10);
 }

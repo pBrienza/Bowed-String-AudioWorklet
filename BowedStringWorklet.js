@@ -83,82 +83,82 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     const input = inputs[0];
     const output = outputs[0];
 
-    // output.foreach((channel) => {
-    //   const inputChannel = input[channel];
-    //   const outputChannel = output[channel];
+    output.forEach((channel) => {
+      // const inputChannel = input[channel];
+      // const outputChannel = output[channel];
 
-    for (let i = 0; i < input.length; i++) {
-      // calculations go here
+      for (let i = 0; i < input.length; i++) {
+        // calculations go here
 
-      // Get parameter values
-      const pressure =
-        parameters["pressure"].length > 1
-          ? parameters["pressure"][i]
-          : parameters["pressure"][0];
+        // Get parameter values
+        const pressure =
+          parameters["pressure"].length > 1
+            ? parameters["pressure"][i]
+            : parameters["pressure"][0];
 
-      const velocity =
-        parameters["velocity"].length > 1
-          ? parameters["velocity"][i]
-          : parameters["velocity"][0];
+        const velocity =
+          parameters["velocity"].length > 1
+            ? parameters["velocity"][i]
+            : parameters["velocity"][0];
 
-      const L =
-        parameters["L"].length > 1 ? parameters["L"][i] : parameters["L"][0];
+        const L =
+          parameters["L"].length > 1 ? parameters["L"][i] : parameters["L"][0];
 
-      const readIndex = this.writeIndex - L;
-      if (readIndex < 0) readIndex += this.maxDelayInSamples;
+        const readIndex = this.writeIndex - L;
+        if (readIndex < 0) readIndex += this.maxDelayInSamples;
 
-      // Check if pressure has changed since last sample. Recalculate bowtable if so.
-      if (this.lastPressure != pressure) {
-        createBowTable(this.bowTable, this.maxVc, pressure, this.tableSlope);
+        // Check if pressure has changed since last sample. Recalculate bowtable if so.
+        if (this.lastPressure != pressure) {
+          createBowTable(this.bowTable, this.maxVc, pressure, this.tableSlope);
+        }
+        this.lastPressure = pressure;
+
+        // Center
+        this.stringState =
+          velocity -
+          this.stringDelays[3][readIndex] -
+          this.stringDelays[1][readIndex];
+        this.center = this.bowTable[stringState] * stringState;
+
+        // Node 0
+
+        this.nodes[0] = this.stringDelays[3][readIndex] + this.center;
+
+        // Bridge
+
+        this.bridge = processBiquad(
+          this.bridgeDelays,
+          this.stringDelays[0][readIndex],
+        );
+
+        // Node 1
+
+        this.nodes[1] = this.bridge;
+
+        // Node 2
+
+        this.nodes[2] = this.stringDelays[1][readIndex] + this.center;
+
+        // Node 3
+
+        this.nodes[3] = -1 * this.stringDelays[2][readIndex];
+
+        // Body [OUTPUT]
+
+        this.body = processBiquad(this.bodyDelays, this.node0);
+        channel[i] = this.body;
+
+        // Cycle Buffers
+
+        for (let j = 0; j < this.stringDelays.length; j++) {
+          this.stringDelays[j][this.writeIndex] = this.nodes[j];
+        }
+
+        // Increment writeIndex
+
+        this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
       }
-      this.lastPressure = pressure;
-
-      // Center
-      this.stringState =
-        velocity -
-        this.stringDelays[3][readIndex] -
-        this.stringDelays[1][readIndex];
-      this.center = this.bowTable[stringState] * stringState;
-
-      // Node 0
-
-      this.nodes[0] = this.stringDelays[3][readIndex] + this.center;
-
-      // Bridge
-
-      this.bridge = processBiquad(
-        this.bridgeDelays,
-        this.stringDelays[0][readIndex],
-      );
-
-      // Node 1
-
-      this.nodes[1] = this.bridge;
-
-      // Node 2
-
-      this.nodes[2] = this.stringDelays[1][readIndex] + this.center;
-
-      // Node 3
-
-      this.nodes[3] = -1 * this.stringDelays[2][readIndex];
-
-      // Body [OUTPUT]
-
-      this.body = processBiquad(this.bodyDelays, this.node0);
-      output[i] = this.body;
-
-      // Cycle Buffers
-
-      for (let j = 0; j < this.stringDelays.length; j++) {
-        this.stringDelays[j][this.writeIndex] = this.nodes[j];
-      }
-
-      // Increment writeIndex
-
-      this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
-    }
-    // });
+    });
     return true;
   }
 }
