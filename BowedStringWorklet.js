@@ -1,32 +1,32 @@
 class BowedStringWorklet extends AudioWorkletProcessor {
-  static get parameterDescriptors() {
-    return [
-      {
-        name: "L",
-        defaultValue: 0,
-        minValue: 0,
-        maxValue: 48000,
-      },
-      {
-        name: "velocity",
-        defaultValue: 0,
-        minValue: -1,
-        maxValue: 1,
-      },
-      {
-        name: "pressure",
-        defaultValue: 0,
-        minValue: 0,
-        maxValue: 1,
-      },
-    ];
-  }
+  // static get parameterDescriptors() {
+  //   return [
+  //     {
+  //       name: "L",
+  //       defaultValue: 0,
+  //       minValue: 0,
+  //       maxValue: 48000,
+  //     },
+  //     {
+  //       name: "velocity",
+  //       defaultValue: 0,
+  //       minValue: -1,
+  //       maxValue: 1,
+  //     },
+  //     {
+  //       name: "pressure",
+  //       defaultValue: 0,
+  //       minValue: 0,
+  //       maxValue: 1,
+  //     },
+  //   ];
+  // }
 
   // Four banks of filters:
   // One for the modeling loop, one for the biquad bridge filter, one for the biquad body filter
   constructor() {
     super();
-    this.sampleRate = 48000;
+    this.sampleRate = 100;
     this.maxDelayInSamples = this.sampleRate / 20; // limit at 20hz max for testing
     this.stringDelays = [
       new Array(this.maxDelayInSamples).fill(0),
@@ -35,35 +35,20 @@ class BowedStringWorklet extends AudioWorkletProcessor {
       new Array(this.maxDelayInSamples).fill(0),
     ];
     this.stringPointers = [0, 0, 0, 0];
-    this.bridgeDelays = [
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-    ];
-    this.bridgePointers = [0, 0, 0, 0];
-    this.bridgeDelays = [
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-    ];
-    this.bridgePointers = [0, 0, 0, 0];
-    this.bodyDelays = [
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-      new Array(this.maxDelayInSamples).fill(0),
-    ];
-    this.bodyPointers = [0, 0, 0, 0];
+    this.bridgeDelays = new Float32Array(4).fill(0);
+    this.bodyDelays = new Float32Array(4).fill(0);
 
     // LUT bow table
-    this.bowTable = new Array(this.sampleRate).fill(0);
-    // store pressure value to check if there has been change and the bowtable needs recalculated
-    this.lastPressure = 0;
+    this.maxVc = 0.5;
+    this.tableSlope = -4;
+    this.pressureDepth = 10;
 
-    this.maxVc = 0.4;
-    this.tableSlope = 4;
+    this.bowTable = new Array(this.pressureDepth);
+    for (let i = 0; i < this.pressureDepth; i++) {
+      this.bowTable[i] = new Float32Array(this.sampleRate).fill(0);
+    }
+    createBowTable(this.bowTable, this.maxVc, this.tableSlope);
+    // store pressure value to check if there has been change and the bowtable needs recalculated
 
     this.writeIndex = 0;
 
@@ -83,42 +68,65 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     const input = inputs[0];
     const output = outputs[0];
 
-    output.forEach((channel) => {
+    for (let channel = 0; channel < output.length; channel++) {
       // const inputChannel = input[channel];
       // const outputChannel = output[channel];
 
-      for (let i = 0; i < input.length; i++) {
+      for (let samp = 0; samp < input.length; samp++) {
+        const pressure = input[0][samp];
+        const velocity = input[1][samp];
+        const delay = parseInt(input[2][samp]);
+        //output[channel][samp] = delay;
         // calculations go here
 
         // Get parameter values
-        const pressure =
-          parameters["pressure"].length > 1
-            ? parameters["pressure"][i]
-            : parameters["pressure"][0];
 
-        const velocity =
-          parameters["velocity"].length > 1
-            ? parameters["velocity"][i]
-            : parameters["velocity"][0];
+        // const pressure =
+        //   parameters["pressure"].length > 1
+        //     ? parameters["pressure"][i]
+        //     : parameters["pressure"][0];
 
-        const L =
-          parameters["L"].length > 1 ? parameters["L"][i] : parameters["L"][0];
+        // const velocity =
+        //   parameters["velocity"].length > 1
+        //     ? parameters["velocity"][i]
+        //     : parameters["velocity"][0];
 
-        const readIndex = this.writeIndex - L;
+        // const L =
+        //   parameters["L"].length > 1
+        //     ? parameters["L"][samp]
+        //     : parameters["L"][0];
+
+        var readIndex = this.writeIndex - delay;
         if (readIndex < 0) readIndex += this.maxDelayInSamples;
 
-        // Check if pressure has changed since last sample. Recalculate bowtable if so.
-        if (this.lastPressure != pressure) {
-          createBowTable(this.bowTable, this.maxVc, pressure, this.tableSlope);
-        }
-        this.lastPressure = pressure;
+        // DEPRECATED: Check if pressure has changed since last sample. Recalculate bowtable if so.
+        // if (this.lastPressure != pressure) {
+        //   createBowTable(this.bowTable, this.maxVc, pressure, this.tableSlope);
+        // }
+        // this.lastPressure = pressure;
 
+        // BIQUAD TEST
+
+        const noiseTestSig = Math.random() * 2 - 1;
+
+        output[channel][samp] = noiseTestSig;
+
+        // output[channel][samp] = processBiquad(
+        //   this.bodyDelays,
+        //   noiseTestSig,
+        //   this.bodyCoeff,
+        // );
+
+        /** 
         // Center
         this.stringState =
           velocity -
           this.stringDelays[3][readIndex] -
           this.stringDelays[1][readIndex];
-        this.center = this.bowTable[stringState] * stringState;
+        
+        this.center =
+          getValueFromBowTable(this.bowTable, pressure, this.stringState) *
+          this.stringState;
 
         // Node 0
 
@@ -129,6 +137,7 @@ class BowedStringWorklet extends AudioWorkletProcessor {
         this.bridge = processBiquad(
           this.bridgeDelays,
           this.stringDelays[0][readIndex],
+          this.bridgeCoeff,
         );
 
         // Node 1
@@ -145,8 +154,8 @@ class BowedStringWorklet extends AudioWorkletProcessor {
 
         // Body [OUTPUT]
 
-        this.body = processBiquad(this.bodyDelays, this.node0);
-        channel[i] = this.body;
+        this.body = processBiquad(this.bodyDelays, this.node0, this.bodyCoeff);
+        //output[channel][samp] = this.body;
 
         // Cycle Buffers
 
@@ -156,9 +165,9 @@ class BowedStringWorklet extends AudioWorkletProcessor {
 
         // Increment writeIndex
 
-        this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
+        this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;*/
       }
-    });
+    }
     return true;
   }
 }
@@ -167,30 +176,43 @@ function delay(inputChannel) {}
 
 /**
  *
- * @param {Array} bowTable Array of size sampleRate
+ * @param {Array} bowTable 2D Array of size [pressureDepth][sampleRate]
  * @param {number} maxVc maximum catch velocity (0-1)
- * @param {number} pressure pressure applied to bow (0-1)
  * @param {number} slope slope of the bow table ends (for now, will likely be changed to be reactive)
- * @returns
+ * @returns 2d float32 array [pressure][velocity]
  */
-function createBowTable(bowTable, maxVc, pressure, slope) {
-  const Vc = maxVc * ((Math.log10(pressure) + 2) / 2);
-  Vc = Math.max(Vc, 0); // clamped >= 0
-  const b = p + slope * Vc; // offset for slope lines
+function createBowTable(bowTable, maxVc, slope) {
+  for (let pressure = 0; pressure < bowTable.length; pressure++) {
+    const p = pressure / bowTable.length;
+    let Vc = maxVc * ((Math.log10(p) + 2) / 2);
+    Vc = Math.max(Vc, 0); // clamped >= 0
+    const b = p - slope * Vc; // offset for slope lines
 
-  for (i = 0; i < bowTable.length; i++) {
-    const x = (2 * i) / bowTable.length - 1;
-    if (x <= -Vc) {
-      // left slop (clamped >= 0)
-      bowTable[i] = Math.max(-slope * x + b, 0);
-    } else if (x < Vc) {
-      // reflection segment
-      bowTable[i] = pressure;
-    } else {
-      // right slope (clamped >= 0)
-      bowTable[i] = Math.max(slope * x + b, 0);
+    for (let i = 0; i < bowTable[pressure].length; i++) {
+      //console.log(p);
+      const x = (2 * i) / bowTable[pressure].length - 1;
+      if (x <= -Vc) {
+        // left slop (clamped >= 0)
+        bowTable[pressure][i] = Math.max(-slope * x + b, 0);
+      } else if (x < Vc) {
+        // reflection segment
+        bowTable[pressure][i] = p;
+      } else {
+        // right slope (clamped >= 0)
+        bowTable[pressure][i] = Math.max(slope * x + b, 0);
+      }
     }
   }
+}
+
+function getValueFromBowTable(bowTable, pressure, velocity) {
+  const pressureIndex = parseInt(
+    Math.min(Math.max(pressure * bowTable.length, 0), 1),
+  );
+  const velocityIndex = parseInt(
+    Math.min(Math.max(((velocity + 1) / 2) * bowTable[0].length, 0), 1),
+  );
+  return bowTable[pressureIndex][velocityIndex];
 }
 
 /**
@@ -204,15 +226,15 @@ function createBowTable(bowTable, maxVc, pressure, slope) {
 function processBiquad(buffers, input, coeffs) {
   const output =
     input * coeffs[0] +
-    buffers[0][0] * coeffs[1] +
-    buffers[1][0] * coeffs[2] -
-    buffers[2][0] * coeffs[2] -
-    buffers[3][0] * coeffs[3];
+    buffers[0] * coeffs[1] +
+    buffers[1] * coeffs[2] -
+    buffers[2] * coeffs[3] -
+    buffers[3] * coeffs[4];
   // cylce buffers
-  buffers[0][1] = 0;
-  buffers[1][1] = buffers[0][0];
-  buffers[2][1] = output;
-  buffers[3][1] = buffers[2][0];
+  buffers[3] = buffers[2];
+  buffers[2] = output;
+  buffers[1] = buffers[0];
+  buffers[0] = input;
 
   return output;
 }

@@ -1,10 +1,27 @@
 class BowADSR {
+  /**
+   *
+   * @param {AudioContext} audioCtx
+   * @param {BowedStringWorklet} bowFilter
+   * @param {number} a Attack
+   * @param {number} d Decay
+   * @param {number} s Sustain
+   * @param {number} r Release
+   */
   constructor(audioCtx, bowFilter, a, d, s, r) {
     this.audioCtx = audioCtx;
     this.pressure = new ConstantSourceNode(audioCtx, { offset: 0 });
     this.velocity = new ConstantSourceNode(audioCtx, { offset: 0 });
+    this.delay = new ConstantSourceNode(audioCtx, { offset: 0 });
+    this.parameters = audioCtx.createChannelMerger(3);
+    // console.log(this.parameters.channelCount.value);
+    this.pressure.connect(this.parameters, 0, 0);
+    this.velocity.connect(this.parameters, 0, 1);
+    this.delay.connect(this.parameters, 0, 2);
+    this.parameters.connect(bowFilter);
     this.pressure.start();
     this.velocity.start();
+    this.delay.start();
 
     this.a = a;
     this.d = d;
@@ -23,13 +40,17 @@ class BowADSR {
     this.r = r;
   }
 
-  connectVelocity(node) {
-    this.velocity.connect(node);
-  }
+  // connectParametersToFilter(filter) {
+  //   this.parameters.connect(filter);
+  // }
 
-  connectPressure(node) {
-    this.pressure.connect(node);
-  }
+  // connectVelocity(node) {
+  //   this.velocity.connect(node);
+  // }
+
+  // connectPressure(node) {
+  //   this.pressure.connect(node);
+  // }
 
   getPressure() {
     return this.pressure.offset.value;
@@ -109,6 +130,14 @@ class BowADSR {
 
     this.pressure.offset.cancelScheduledValues(currentTime);
     this.pressure.offset.linearRampToValueAtTime(0, this.releaseTime);
+  }
+
+  setDelay(delayInSamples, rampTimeInSeconds) {
+    this.delay.offset.cancelScheduledValues(this.audioCtx.currentTime);
+    this.delay.offset.linearRampToValueAtTime(
+      delayInSamples,
+      this.audioCtx.currentTime + rampTimeInSeconds,
+    );
   }
 }
 
