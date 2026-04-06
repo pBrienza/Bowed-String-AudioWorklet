@@ -34,10 +34,14 @@ async function main() {
   const s = 1;
   const r = 0.2;
 
-  let velocity = 0.3;
+  let velocity = 0.4;
   let pressure = 1;
 
   const bowADSR = new BowADSR(ctx, bowFilter, a, d, s, r);
+
+  const noise = MusicTools.createNoiseBuffer(ctx);
+  noise.connect(bowADSR.parameters, 0, 1);
+  noise.start();
 
   //bowADSR.connectParametersToFilter(bowFilter);
 
@@ -63,10 +67,12 @@ async function main() {
   document.querySelector("#vSlider").addEventListener("input", (e) => {
     const value = parseFloat(e.target.value);
     velocity = value;
+    document.querySelector("#vLabel").innerText = `Max Velocity: ${value}`;
   });
   document.querySelector("#pSlider").addEventListener("input", (e) => {
     const value = parseFloat(e.target.value);
     pressure = value;
+    document.querySelector("#pLabel").innerText = `Max Velocity: ${value}`;
   });
 
   // Output Monitoring

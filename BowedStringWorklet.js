@@ -34,12 +34,15 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     this.writeIndex = 0;
     this.readIndex = 0;
 
-    // Node value preallocation
+    // Value preallocation
     this.center = 0;
     this.stringState = 0;
     this.nodes = new Float32Array(4).fill(0);
     this.bridge = 0;
     this.body = 0;
+    this.pressure = 0;
+    this.velocity = 0;
+    this.delay = 0;
 
     this.outputSamp = 0;
 
@@ -57,121 +60,76 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     const input = inputs[0];
     const output = outputs[0];
 
-    let flag = false;
-
     for (let channel = 0; channel < output.length; channel++) {
       // const inputChannel = input[channel];
       // const outputChannel = output[channel];
 
       for (let samp = 0; samp < input.length; samp++) {
-        const pressure = input[0][samp];
-        const velocity = input[1][samp];
-        const delay = parseInt(input[2][samp]);
-        const noiseTestSig = (Math.random() * 2 - 1) / 2;
-        const nodes = new Float32Array(4).fill(0);
-        //output[channel][samp] = delay;
-        // calculations go here
+        this.pressure = input[0][samp];
+        this.velocity = input[1][samp];
+        this.delay = parseInt(input[2][samp]);
+        //const noiseTestSig = (Math.random() * 2 - 1) / 2;
+        //const nodes = new Float32Array(4).fill(0);
 
-        // Get parameter values
-
-        // const pressure =
-        //   parameters["pressure"].length > 1
-        //     ? parameters["pressure"][i]
-        //     : parameters["pressure"][0];
-
-        // const velocity =
-        //   parameters["velocity"].length > 1
-        //     ? parameters["velocity"][i]
-        //     : parameters["velocity"][0];
-
-        // const L =
-        //   parameters["L"].length > 1
-        //     ? parameters["L"][samp]
-        //     : parameters["L"][0];
-
-        this.readIndex = this.writeIndex - delay;
+        this.readIndex = this.writeIndex - this.delay;
         if (this.readIndex < 0) this.readIndex += this.maxDelayInSamples;
 
-        // DEPRECATED: Check if pressure has changed since last sample. Recalculate bowtable if so.
-        // if (this.lastPressure != pressure) {
-        //   createBowTable(this.bowTable, this.maxVc, pressure, this.tableSlope);
-        // }
-        // this.lastPressure = pressure;
-
-        // BIQUAD TEST
-
-        // output[channel][samp] = noiseTestSig;
-
-        // output[channel][samp] = processBiquad(
-        //   this.bodyDelays,
-        //   noiseTestSig,
-        //   this.bodyCoeff,
-        // );
-
         // Center
-        const stringState =
-          velocity -
-          this.stringDelays[3][this.readIndex] -
-          this.stringDelays[1][this.readIndex];
+        // const stringState =
+        //   velocity -
+        //   this.stringDelays[3][this.readIndex] -
+        //   this.stringDelays[1][this.readIndex];
 
-        const center =
-          newBowTable(this.maxVc, this.tableSlope, pressure, velocity) *
-          stringState;
-        flag = test("center", center, flag);
-        // if (flag) {
-        //   console.log(
-        //     `MaxVc: ${this.maxVc} Slope: ${this.tableSlope} P: ${pressure} V: ${velocity} Stringstate: ${stringState}`,
-        //   );
-        //   return true;
-        // }
-        // Node 0
+        // const center =
+        //   newBowTable(this.maxVc, this.tableSlope, pressure, velocity) *
+        //   stringState;
+        // flag = test("center", center, flag);
 
-        nodes[0] = this.stringDelays[3][this.readIndex] + center;
-        flag = test("node0", nodes[0]);
-        // Bridge
+        // nodes[0] = this.stringDelays[3][this.readIndex] + center;
+        // flag = test("node0", nodes[0]);
 
-        const bridge = processBiquad(
-          this.bridgeDelays,
-          this.stringDelays[0][this.readIndex],
-          this.bridgeCoeff,
-        );
-        flag = test("bridge", bridge);
-        // Node 1
+        // // Bridge
 
-        nodes[1] = bridge;
+        // const bridge = processBiquad(
+        //   this.bridgeDelays,
+        //   this.stringDelays[0][this.readIndex],
+        //   this.bridgeCoeff,
+        // );
+        // flag = test("bridge", bridge);
+        // // Node 1
 
-        // Node 2
+        // nodes[1] = bridge;
 
-        nodes[2] = this.stringDelays[1][this.readIndex] + this.center;
+        // // Node 2
 
-        // Node 3
+        // nodes[2] = this.stringDelays[1][this.readIndex] + this.center;
 
-        nodes[3] = -1 * this.stringDelays[2][this.readIndex];
+        // // Node 3
+
+        // nodes[3] = -1 * this.stringDelays[2][this.readIndex];
 
         // Body [OUTPUT]
 
-        const body = processBiquad(this.bodyDelays, nodes[0], this.bodyCoeff);
-        flag = test("body", body);
+        this.body = processBiquad(
+          this.bodyDelays,
+          this.velocity,
+          this.bodyCoeff,
+        );
         //output[channel][samp] = this.body;
 
         // Cycle Buffers
 
-        for (let j = 0; j < this.stringDelays.length; j++) {
-          this.stringDelays[j][this.writeIndex] = nodes[j];
-        }
-
-        //testing write index
-
-        if (this.writeIndex > this.maxDelayInSamples || this.writeIndex < 0)
-          this.outOfBoundsFlag = 1;
+        // for (let j = 0; j < this.stringDelays.length; j++) {
+        //   this.stringDelays[j][this.writeIndex] = nodes[j];
+        // }
 
         // Increment writeIndex
 
-        this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
+        // this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
 
         // OUTPUT - Limited to -1:1
 
-        this.outputSamp = body;
+        this.outputSamp = this.body;
 
         this.outputSamp = this.outputSamp > 1.0 ? 1 : this.outputSamp;
         output[channel][samp] = this.outputSamp < -1.0 ? -1 : this.outputSamp;
@@ -184,7 +142,7 @@ class BowedStringWorklet extends AudioWorkletProcessor {
 //reimplement bowTable as peicewise polynomial caluated per value entered, just for testing?
 function newBowTable(maxVc, slope, pressure, velocity) {
   if (pressure < 0.01) {
-    console.log("pressure <= 0");
+    // console.log("pressure <= 0");
     return 0;
   }
   const Vc = Math.max(maxVc * ((Math.log10(pressure) + 2) / 2), 0);
