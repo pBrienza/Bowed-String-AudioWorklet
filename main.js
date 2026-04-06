@@ -22,11 +22,12 @@ async function main() {
   bowFilter.connect(masterFader);
 
   const rmsMeter = new AnalyserNode(ctx, { fftSize: 1024 });
+  //bowFilter.connect(rmsMeter);
   masterFader.connect(rmsMeter);
 
-  const testSig = new OscillatorNode(ctx, { frequency: 440 });
-  testSig.connect(masterFader);
-  testSig.start();
+  // const testSig = new OscillatorNode(ctx, { frequency: 440 });
+  // testSig.connect(masterFader);
+  // testSig.start();
 
   const a = 100 / 1000;
   const d = 15 / 1000;
@@ -58,6 +59,14 @@ async function main() {
     const value = parseInt(e.target.value);
     bowADSR.setDelay(value, 0.01);
     document.querySelector("#delayLabel").innerText = `Delay: ${value}`;
+  });
+  document.querySelector("#vSlider").addEventListener("input", (e) => {
+    const value = parseFloat(e.target.value);
+    velocity = value;
+  });
+  document.querySelector("#pSlider").addEventListener("input", (e) => {
+    const value = parseFloat(e.target.value);
+    pressure = value;
   });
 
   // Output Monitoring
