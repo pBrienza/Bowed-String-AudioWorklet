@@ -15,6 +15,9 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     //console.log(this.maxDelayInSamples);
     this.bridgeDelays = new Float32Array(4).fill(0);
     this.bodyDelays = new Float32Array(4).fill(0);
+    // this.stringDelays = new Array(4).fill([]);
+    // this.bridgeDelays = [];
+    // this.bodyDelays = [];
 
     // LUT bow table
     this.maxVc = 0.5;
@@ -61,91 +64,92 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     const input = inputs[0];
     const output = outputs[0];
 
+    const outputChannel0 = output[0];
+
     if (!input.length) return true;
+
+    // Init Buffers
+    // initBuffer(this.stringDelays[0], this.maxDelayInSamples, input.length);
+    // initBuffer(this.stringDelays[1], this.maxDelayInSamples, input.length);
+    // initBuffer(this.stringDelays[2], this.maxDelayInSamples, input.length);
+    // initBuffer(this.stringDelays[3], this.maxDelayInSamples, input.length);
+
+    // initBuffer(this.bodyDelays, 4, input.length);
+    // initBuffer(this.bodyDelays, 4, input.length);
 
     //for (let channel = 0; channel < output.length; channel++) {
     // const inputChannel = input[channel];
     // const outputChannel = output[channel];
-    output.forEach((channel) => {
-      for (let samp = 0; samp < channel.length; samp++) {
-        const pressure = input[0][samp];
-        const velocity = input[1][samp];
-        const delay = input[2][samp];
-        // const noiseTestSig = Math.random() * 1.0 - 0.5;
-        // const nodes = new Float32Array(4).fill(0);
+    // output.forEach((channel) => {
+    for (let samp = 0; samp < outputChannel0.length; samp++) {
+      const pressure = input[0][samp];
+      const velocity = input[1][samp];
+      const delay = Math.floor(input[2][samp]);
+      // const noiseTestSig = Math.random() * 1.0 - 0.5;
+      // const nodes = new Float32Array(4).fill(0);
 
-        // this.readIndex = this.writeIndex - this.delay;
-        const readIndex = this.writeIndex - delay;
-        if (this.readIndex < 0) this.readIndex += this.maxDelayInSamples;
+      // this.readIndex = this.writeIndex - this.delay;
+      let readIndex = this.writeIndex - delay;
+      while (readIndex < 0) readIndex += this.maxDelayInSamples;
 
-        // Center
-        const stringState =
-          velocity -
-          this.stringDelays[3][readIndex] -
-          this.stringDelays[1][readIndex];
+      const stringState =
+        velocity -
+        this.stringDelays[3][readIndex] -
+        this.stringDelays[1][readIndex];
 
-        const center =
-          newBowTable(this.maxVc, this.tableSlope, pressure, velocity) *
-          stringState;
-        //flag = test("center", center, flag);
+      const center =
+        newBowTable(this.maxVc, this.tableSlope, pressure, velocity) *
+        stringState;
 
-        const node0 = this.stringDelays[3][readIndex] + center;
-        //flag = test("node0", nodes[0]);
+      const node0 = this.stringDelays[3][readIndex] + center;
 
-        // Bridge
+      // const bridge = processBiquad(
+      //   this.bridgeDelays,
+      //   this.stringDelays[0][readIndex],
+      //   this.bridgeCoeff,
+      // );
+      const bridge = node0;
 
-        const bridge = processBiquad(
-          this.bridgeDelays,
-          this.stringDelays[0][readIndex],
-          this.bridgeCoeff,
-        );
-        //flag = test("bridge", bridge);
-        // Node 1
+      const node1 = bridge;
 
-        const node1 = bridge;
+      const node2 = this.stringDelays[1][readIndex] + center;
 
-        // Node 2
+      const node3 = -1 * this.stringDelays[2][readIndex];
 
-        const node2 = this.stringDelays[1][readIndex] + center;
+      // Body [OUTPUT]
 
-        // Node 3
+      // const body = processBiquad(
+      //   this.bodyDelays,
+      //   this.stringDelays[0][readIndex],
+      //   this.bodyCoeff,
+      // );
+      const body = node0;
 
-        const node3 = -1 * this.stringDelays[2][readIndex];
+      // Cycle Buffers
 
-        // Body [OUTPUT]
+      // for (let j = 0; j < this.stringDelays.length; j++) {
+      //   this.stringDelays[j][this.writeIndex] = nodes[j];
+      // }
+      this.stringDelays[0][this.writeIndex] = node0;
+      this.stringDelays[1][this.writeIndex] = node1;
+      this.stringDelays[2][this.writeIndex] = node2;
+      this.stringDelays[3][this.writeIndex] = node3;
 
-        const body = processBiquad(
-          this.bodyDelays,
-          this.stringDelays[0][readIndex],
-          this.bodyCoeff,
-        );
-        //output[channel][samp] = this.body;
+      // Increment writeIndex
 
-        // Cycle Buffers
+      this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
 
-        // for (let j = 0; j < this.stringDelays.length; j++) {
-        //   this.stringDelays[j][this.writeIndex] = nodes[j];
-        // }
-        this.stringDelays[0][this.writeIndex] = node0;
-        this.stringDelays[1][this.writeIndex] = node1;
-        this.stringDelays[2][this.writeIndex] = node2;
-        this.stringDelays[3][this.writeIndex] = node3;
+      // OUTPUT - Limited to -1:1
 
-        // OUTPUT - Limited to -1:1
+      // this.outputSamp = this.body;
 
-        // this.outputSamp = this.body;
+      // this.outputSamp = this.outputSamp > 1.0 ? 1 : this.outputSamp;
+      // output[channel][samp] = this.outputSamp < -1.0 ? -1 : this.outputSamp;
 
-        // this.outputSamp = this.outputSamp > 1.0 ? 1 : this.outputSamp;
-        // output[channel][samp] = this.outputSamp < -1.0 ? -1 : this.outputSamp;
-
-        channel[samp] = body;
-      }
-    });
+      outputChannel0[samp] = body;
+    }
+    // });
     //}
-
-    // Increment writeIndex
-
-    this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
 
     return true;
   }
@@ -206,12 +210,20 @@ function test(msg, num, flag) {
   } else return flag;
 }
 
-function initBuffer(buffer, size) {
-  for (let i = 0; i < size; i++) {
-    if (!buffer[i]) {
-      buffer[i] = 0;
-    }
-  }
-}
+// function initBuffer(buffer, maxDelay, channelSize) {
+//   for (let i = 0; i < channelSize; i++) {
+//     if (!buffer[i]) {
+//       buffer[i] = new Float32Array(maxDelay).fill(0);
+//     }
+//   }
+// }
+
+// function initBiqBuffer(buffer, channelSize){
+//   for (let i = 0; i < channelSize; i++){
+//     if (!buffer[i]) {
+//       buffer[i] = new Float32Array(4).fill(0);
+//     }
+//   }
+// }
 
 registerProcessor("BowedStringWorklet", BowedStringWorklet);
