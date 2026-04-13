@@ -40,9 +40,10 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     this.nodes = new Float32Array(4).fill(0);
     this.bridge = 0;
     this.body = 0;
-    this.pressure = 0;
-    this.velocity = 0;
-    this.delay = 0;
+    this.pressure = [];
+    this.velocity = [];
+    this.delay = [];
+    this.nodes = new Float32Array(4).fill([]);
 
     this.outputSamp = 0;
 
@@ -60,59 +61,62 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     const input = inputs[0];
     const output = outputs[0];
 
-    for (let channel = 0; channel < output.length; channel++) {
-      // const inputChannel = input[channel];
-      // const outputChannel = output[channel];
+    if (!input.length) return true;
 
-      for (let samp = 0; samp < input.length; samp++) {
-        this.pressure = input[0][samp];
-        this.velocity = input[1][samp];
-        this.delay = parseInt(input[2][samp]);
-        //const noiseTestSig = (Math.random() * 2 - 1) / 2;
-        //const nodes = new Float32Array(4).fill(0);
+    //for (let channel = 0; channel < output.length; channel++) {
+    // const inputChannel = input[channel];
+    // const outputChannel = output[channel];
+    output.forEach((channel) => {
+      for (let samp = 0; samp < channel.length; samp++) {
+        const pressure = input[0][samp];
+        const velocity = input[1][samp];
+        const delay = input[2][samp];
+        // const noiseTestSig = Math.random() * 1.0 - 0.5;
+        // const nodes = new Float32Array(4).fill(0);
 
-        this.readIndex = this.writeIndex - this.delay;
+        // this.readIndex = this.writeIndex - this.delay;
+        const readIndex = this.writeIndex - delay;
         if (this.readIndex < 0) this.readIndex += this.maxDelayInSamples;
 
         // Center
-        // const stringState =
-        //   velocity -
-        //   this.stringDelays[3][this.readIndex] -
-        //   this.stringDelays[1][this.readIndex];
+        const stringState =
+          velocity -
+          this.stringDelays[3][readIndex] -
+          this.stringDelays[1][readIndex];
 
-        // const center =
-        //   newBowTable(this.maxVc, this.tableSlope, pressure, velocity) *
-        //   stringState;
-        // flag = test("center", center, flag);
+        const center =
+          newBowTable(this.maxVc, this.tableSlope, pressure, velocity) *
+          stringState;
+        //flag = test("center", center, flag);
 
-        // nodes[0] = this.stringDelays[3][this.readIndex] + center;
-        // flag = test("node0", nodes[0]);
+        const node0 = this.stringDelays[3][readIndex] + center;
+        //flag = test("node0", nodes[0]);
 
-        // // Bridge
+        // Bridge
 
-        // const bridge = processBiquad(
-        //   this.bridgeDelays,
-        //   this.stringDelays[0][this.readIndex],
-        //   this.bridgeCoeff,
-        // );
-        // flag = test("bridge", bridge);
-        // // Node 1
+        const bridge = processBiquad(
+          this.bridgeDelays,
+          this.stringDelays[0][readIndex],
+          this.bridgeCoeff,
+        );
+        //flag = test("bridge", bridge);
+        // Node 1
 
-        // nodes[1] = bridge;
+        const node1 = bridge;
 
-        // // Node 2
+        // Node 2
 
-        // nodes[2] = this.stringDelays[1][this.readIndex] + this.center;
+        const node2 = this.stringDelays[1][readIndex] + center;
 
-        // // Node 3
+        // Node 3
 
-        // nodes[3] = -1 * this.stringDelays[2][this.readIndex];
+        const node3 = -1 * this.stringDelays[2][readIndex];
 
         // Body [OUTPUT]
 
-        this.body = processBiquad(
+        const body = processBiquad(
           this.bodyDelays,
-          this.velocity,
+          this.stringDelays[0][readIndex],
           this.bodyCoeff,
         );
         //output[channel][samp] = this.body;
@@ -122,37 +126,52 @@ class BowedStringWorklet extends AudioWorkletProcessor {
         // for (let j = 0; j < this.stringDelays.length; j++) {
         //   this.stringDelays[j][this.writeIndex] = nodes[j];
         // }
-
-        // Increment writeIndex
-
-        // this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
+        this.stringDelays[0][this.writeIndex] = node0;
+        this.stringDelays[1][this.writeIndex] = node1;
+        this.stringDelays[2][this.writeIndex] = node2;
+        this.stringDelays[3][this.writeIndex] = node3;
 
         // OUTPUT - Limited to -1:1
 
-        this.outputSamp = this.body;
+        // this.outputSamp = this.body;
 
-        this.outputSamp = this.outputSamp > 1.0 ? 1 : this.outputSamp;
-        output[channel][samp] = this.outputSamp < -1.0 ? -1 : this.outputSamp;
+        // this.outputSamp = this.outputSamp > 1.0 ? 1 : this.outputSamp;
+        // output[channel][samp] = this.outputSamp < -1.0 ? -1 : this.outputSamp;
+
+        channel[samp] = body;
       }
-    }
+    });
+    //}
+
+    // Increment writeIndex
+
+    this.writeIndex = (this.writeIndex + 1) % this.maxDelayInSamples;
+
     return true;
   }
 }
 
 //reimplement bowTable as peicewise polynomial caluated per value entered, just for testing?
 function newBowTable(maxVc, slope, pressure, velocity) {
-  if (pressure < 0.01) {
-    // console.log("pressure <= 0");
-    return 0;
-  }
+  // if (pressure < 0.01) {
+  //   // console.log("pressure <= 0");
+  //   return 0;
+  // }
+  // const p = Math.max(pressure, 0.01);
   const Vc = Math.max(maxVc * ((Math.log10(pressure) + 2) / 2), 0);
   const b = pressure - slope * Vc;
+  let result = 0;
   if (velocity <= -Vc) {
-    return Math.max(-slope * velocity + b, 0);
+    result = Math.max(-slope * velocity + b, 0);
   } else if (velocity < Vc) {
-    return pressure;
+    result = pressure;
   } else {
-    return Math.max(slope * velocity + b, 0);
+    result = Math.max(slope * velocity + b, 0);
+  }
+  if (isNaN(result)) {
+    return 0;
+  } else {
+    return result;
   }
 }
 
@@ -185,6 +204,14 @@ function test(msg, num, flag) {
     console.log(msg);
     return true;
   } else return flag;
+}
+
+function initBuffer(buffer, size) {
+  for (let i = 0; i < size; i++) {
+    if (!buffer[i]) {
+      buffer[i] = 0;
+    }
+  }
 }
 
 registerProcessor("BowedStringWorklet", BowedStringWorklet);

@@ -23,6 +23,10 @@ class BowADSR {
     this.velocity.start();
     this.delay.start();
 
+    // this.test = new OscillatorNode(audioCtx, { frequency: 440 });
+    // this.test.start();
+    // this.test.connect(this.parameters, 0, 1);
+
     this.a = a;
     this.d = d;
     this.s = s;
