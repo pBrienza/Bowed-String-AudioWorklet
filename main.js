@@ -72,7 +72,7 @@ async function main() {
   document.querySelector("#pSlider").addEventListener("input", (e) => {
     const value = parseFloat(e.target.value);
     pressure = value;
-    document.querySelector("#pLabel").innerText = `Max Velocity: ${value}`;
+    document.querySelector("#pLabel").innerText = `Max Pressure: ${value}`;
   });
 
   // Output Monitoring

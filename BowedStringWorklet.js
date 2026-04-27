@@ -57,7 +57,9 @@ class BowedStringWorklet extends AudioWorkletProcessor {
     this.bridgeCoeff = [0.010295, 0, -0.010295, -1.973336, 0.973687];
 
     // Testing
-    console.log(newBowTable(this.maxVc, this.slope, 0, 0));
+    for (let i = 0; i <= 1; i += 0.1) {
+      console.log(newBowTable(this.maxVc, this.slope, 1, i));
+    }
   }
 
   process(inputs, outputs, parameters) {
@@ -98,17 +100,17 @@ class BowedStringWorklet extends AudioWorkletProcessor {
         this.stringDelays[1][readIndex];
 
       const center =
-        newBowTable(this.maxVc, this.tableSlope, pressure, velocity) *
+        staticBowTable(this.maxVc, this.tableSlope, pressure, stringState) *
         stringState;
 
       const node0 = this.stringDelays[3][readIndex] + center;
 
-      // const bridge = processBiquad(
-      //   this.bridgeDelays,
-      //   this.stringDelays[0][readIndex],
-      //   this.bridgeCoeff,
-      // );
-      const bridge = node0;
+      const bridge = processBiquad(
+        this.bridgeDelays,
+        this.stringDelays[0][readIndex],
+        this.bridgeCoeff,
+      );
+      // const bridge = -1 * node0;
 
       const node1 = bridge;
 
@@ -118,12 +120,12 @@ class BowedStringWorklet extends AudioWorkletProcessor {
 
       // Body [OUTPUT]
 
-      // const body = processBiquad(
-      //   this.bodyDelays,
-      //   this.stringDelays[0][readIndex],
-      //   this.bodyCoeff,
-      // );
-      const body = node0;
+      const body = processBiquad(
+        this.bodyDelays,
+        this.stringDelays[0][readIndex],
+        this.bodyCoeff,
+      );
+      // const body = this.stringDelays[0][readIndex];
 
       // Cycle Buffers
 
@@ -157,25 +159,31 @@ class BowedStringWorklet extends AudioWorkletProcessor {
 
 //reimplement bowTable as peicewise polynomial caluated per value entered, just for testing?
 function newBowTable(maxVc, slope, pressure, velocity) {
-  // if (pressure < 0.01) {
-  //   // console.log("pressure <= 0");
-  //   return 0;
-  // }
-  // const p = Math.max(pressure, 0.01);
+  if (pressure < 0.01) {
+    // console.log("pressure <= 0");
+    return 0;
+  }
   const Vc = Math.max(maxVc * ((Math.log10(pressure) + 2) / 2), 0);
   const b = pressure - slope * Vc;
-  let result = 0;
   if (velocity <= -Vc) {
-    result = Math.max(-slope * velocity + b, 0);
+    return Math.max(-slope * velocity + b, 0);
   } else if (velocity < Vc) {
-    result = pressure;
+    return pressure;
   } else {
-    result = Math.max(slope * velocity + b, 0);
+    return Math.max(slope * velocity + b, 0);
   }
-  if (isNaN(result)) {
-    return 0;
+}
+
+function staticBowTable(pressure, velocity) {
+  const Vc = 0.5;
+  const slope = -4;
+  const b = pressure - slope * Vc;
+  if (velocity <= -Vc) {
+    return Math.max(-slope * velocity + b, 0);
+  } else if (velocity < Vc) {
+    return pressure;
   } else {
-    return result;
+    return Math.max(slope * velocity + b, 0);
   }
 }
 
